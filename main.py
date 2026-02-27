@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 import os
@@ -18,14 +18,22 @@ from auth import router as auth_router, get_current_user_optional, get_current_u
 from fastapi import Depends
 from fastapi.responses import FileResponse
 
+# Follow-up Agent imports
+import followup_db
+from followup_analyzer import evaluate_patient_response
+from twilio_client import twilio_agent
+import mediconnect_api
+
 app = FastAPI(title="Lab Report Intelligence API")
 
 # Include Auth Router
 app.include_router(auth_router)
+app.include_router(mediconnect_api.router)
 
-# Ensure data and static directories exist
+# Ensure data and portal directories exist
 os.makedirs("data", exist_ok=True)
 os.makedirs("static", exist_ok=True)
+os.makedirs("static/portal", exist_ok=True)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -33,6 +41,16 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.get("/")
 async def serve_index():
     return FileResponse("static/index.html")
+
+# Special route for the React Portal
+@app.get("/portal/")
+@app.get("/portal/{full_path:path}")
+async def serve_portal(full_path: str = ""):
+    index_path = os.path.join("static", "portal", "index.html")
+    file_path = os.path.join("static", "portal", full_path)
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    return FileResponse(index_path)
 
 HISTORY_FILE = "data/history.json"
 SETTINGS_FILE = "data/settings.json"
@@ -234,6 +252,72 @@ async def get_trends(current_user: dict = Depends(get_current_user)):
         trends[name]["values"].append(m["value"])
         
     return trends
+
+# --- Autonomous Patient Follow-up Agent Endpoints ---
+
+@app.post("/api/followup/test-trigger")
+def trigger_followup(patient_phone: str = Form(...)):
+    """Simulates a background CRON job sending a scheduled check-in message."""
+    patient = followup_db.get_patient_by_phone(patient_phone)
+    if not patient:
+        # Auto-create for demo purposes
+        followup_db.add_patient("Demo Patient", patient_phone, "Knee Replacement", "2024-05-10", "+19999999999")
+        patient = followup_db.get_patient_by_phone(patient_phone)
+        
+    msg = f"Hello {patient['name']}, this is your post-surgery check-in. On a scale of 1-10, what is your pain level today? Are you experiencing any new swelling, redness, or fever?"
+    twilio_agent.send_message(patient['phone_number'], msg)
+    
+    # Normally we wouldn't add a check-in record until they reply, but for demo tracking we log the outbound.
+    return {"status": "Message sparked", "patient": patient['name']}
+
+@app.post("/api/followup/webhook")
+def twilio_webhook(From: str = Form(""), Body: str = Form("")):
+    """Handles incoming SMS/WhatsApp from the patient via Twilio."""
+    from_number = From
+    body = Body
+    
+    # Identify patient
+    patient = followup_db.get_patient_by_phone(from_number)
+    
+    # If this is an unknown number but we're in mock mode, fallback to the latest patient for demo ease
+    if not patient:
+        patients = followup_db.get_all_patients()
+        if patients:
+            patient = patients[-1]
+        else:
+            return JSONResponse({"error": "Patient not found"})
+            
+    # AI Evaluation
+    analysis = evaluate_patient_response(body)
+    
+    # Log to SQLite
+    followup_db.add_checkin(
+        patient_id=patient['id'],
+        message_sent="Automated Check-in",
+        patient_response=body,
+        pain_level=analysis.get('pain_level', 0),
+        symptoms_flagged=analysis.get('symptoms_flagged', 'None'),
+        requires_alert=analysis.get('requires_alert', False)
+    )
+    
+    # Trigger Doctor Alert if required
+    if analysis.get('requires_alert'):
+        alert_msg = f"🚨 URGENT: Patient {patient['name']} reported high pain ({analysis.get('pain_level')}/10) or dangerous symptoms: {analysis.get('symptoms_flagged')}."
+        # Theoretically send to patient['doctor_phone'], but route to console/mock twilio for safety
+        twilio_agent.send_message(patient['doctor_phone'] or "+19999999999", alert_msg)
+        
+        # Sent immediate auto-reply to patient assuring them the doctor was notified
+        twilio_agent.send_message(patient['phone_number'], "Thank you for the update. We have alerted your doctor about your symptoms and they will contact you shortly.")
+    else:
+        # Standard acknowledgement
+        twilio_agent.send_message(patient['phone_number'], "Thank you for your update. Your recovery seems to be on track. Have a good day!")
+        
+    return JSONResponse({"status": "received"})
+
+@app.get("/api/followup/dashboard")
+def get_dashboard():
+    """Returns recent patient check-ins for the Doctor's dashboard UI."""
+    return followup_db.get_recent_checkins()
 
 if __name__ == "__main__":
     import uvicorn

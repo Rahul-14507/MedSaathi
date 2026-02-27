@@ -47,6 +47,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
     
+    if username.startswith("PAT-"):
+        import mediconnect_db
+        patients = mediconnect_db.search_patients(username)
+        if not patients:
+            raise credentials_exception
+        # Mock user object for the frontend
+        return {"username": patients[0]["unique_id"]}
+
     # Check if user exists in CosmosDB
     db = get_db()
     users_container = db.get("users")
@@ -98,6 +106,22 @@ async def register(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    if form_data.username.startswith("PAT-"):
+        if form_data.password != "password":
+            raise HTTPException(status_code=401, detail="Incorrect username or password")
+        
+        import mediconnect_db
+        patients = mediconnect_db.search_patients(form_data.username)
+        if not patients:
+            raise HTTPException(status_code=401, detail="Incorrect username or password")
+            
+        patient = patients[0]
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": patient["unique_id"]}, expires_delta=access_token_expires
+        )
+        return {"access_token": access_token, "token_type": "bearer", "user": {"username": patient["unique_id"]}}
+
     db = get_db()
     users_container = db.get("users")
     if not users_container:

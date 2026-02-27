@@ -27,8 +27,12 @@
                 <li id="nav-analyze" class="active"><i class="fa-solid fa-file-medical"></i> Analyze Report</li>
                 <li id="nav-prescription"><i class="fa-solid fa-pen-to-square"></i> Parse Prescription</li>
                 <li id="nav-trends" class="hidden"><i class="fa-solid fa-chart-line"></i> Health Trends</li>
+                <li id="nav-followup" class="hidden"><i class="fa-solid fa-user-nurse"></i> Follow-up Dashboard</li>
                 <li id="nav-history"><i class="fa-solid fa-clock-rotate-left"></i> History</li>
                 <li id="nav-settings"><i class="fa-solid fa-gear"></i> Settings</li>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;" />
+                <li id="nav-portal" style="color: var(--primary-color); font-weight: 500;"><i
+                        class="fa-solid fa-hospital"></i> Enter Staff Portal</li>
             </ul>
 
             <div class="system-status"
@@ -192,6 +196,28 @@
                 </header>
                 <div id="chartsContainer" class="results-grid" style="grid-template-columns: 1fr;">
                     <!-- Charts injected here -->
+                </div>
+            </section>
+
+            <!-- Follow-up Dashboard Section -->
+            <section class="followup-section hidden" id="followupSection">
+                <header>
+                    <h1>Patient Follow-up Dashboard</h1>
+                    <p>Live post-surgery recovery metrics and automated triage alerts.</p>
+                </header>
+
+                <!-- Action Controls -->
+                <div style="margin-bottom: 2rem; display: flex; gap: 1rem;">
+                    <button class="btn btn-outline" id="refreshFollowupBtn"><i class="fa-solid fa-arrows-rotate"></i>
+                        Refresh Dashboard</button>
+                    <button class="btn btn-primary" id="triggerDemoCheckinBtn"><i class="fa-solid fa-paper-plane"></i>
+                        Stimulate Check-in (Demo)</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-body" id="followupList" style="padding: 0;">
+                        <!-- Table injected here -->
+                    </div>
                 </div>
             </section>
 

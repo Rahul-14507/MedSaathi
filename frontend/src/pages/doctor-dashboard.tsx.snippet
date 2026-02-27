@@ -1,0 +1,53 @@
+
+function ActiveEmergencies() {
+    const { data: emergencies } = useQuery<{ visit: any, patient: Patient, attendedBy: any }[]>({
+        queryKey: ["/api/visits/active-emergencies"],
+        refetchInterval: 5000, // Poll every 5 seconds
+    });
+
+    if (!emergencies || emergencies.length === 0) return null;
+
+    return (
+        <div className="space-y-3 animate-pulse-subtle">
+            <h2 className="text-sm font-bold text-red-600 uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
+                Active Emergencies ({emergencies.length})
+            </h2>
+            <div className="grid gap-3">
+                {emergencies.map(({ visit, patient }) => (
+                    <Link key={visit.id} href={`/patients/${patient.id}`}>
+                        <Card className="cursor-pointer hover:shadow-lg transition-all border-red-200 bg-red-50/50 hover:border-red-300 group">
+                            <CardContent className="p-5 flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-bold text-lg shadow-sm border border-red-200">
+                                        !
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-red-900 text-base">{patient.name}</h3>
+                                            <Badge variant="destructive" className="animate-pulse">Emergency</Badge>
+                                        </div>
+                                        <div className="flex items-center gap-3 mt-1 text-xs text-red-700/80">
+                                            <span className="font-mono bg-white/50 px-2 py-0.5 rounded-full font-semibold border border-red-100">
+                                                {patient.uniqueId}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                Last Visit: {new Date(visit.date).toLocaleTimeString()}
+                                            </span>
+                                        </div>
+                                        {visit.symptoms && (
+                                            <p className="text-xs text-red-600 mt-2 font-medium">
+                                                "{visit.symptoms}"
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                                <ArrowRight className="w-5 h-5 text-red-400 group-hover:text-red-600 transition-colors" />
+                            </CardContent>
+                        </Card>
+                    </Link>
+                ))}
+            </div>
+        </div>
+    );
+}

@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const navTrends = document.getElementById('nav-trends');
     const navHistory = document.getElementById('nav-history');
     const navSettings = document.getElementById('nav-settings');
+    const navFollowup = document.getElementById('nav-followup');
+    const navPortal = document.getElementById('nav-portal');
 
     // Section Elements
     const uploadSection = document.getElementById('uploadSection');
@@ -16,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsSection = document.getElementById('resultsSection');
     const historySection = document.getElementById('historySection');
     const settingsSection = document.getElementById('settingsSection');
+    const followupSection = document.getElementById('followupSection');
 
     // UI Elements
     const pageTitle = document.getElementById('pageTitle');
@@ -74,12 +77,19 @@ document.addEventListener('DOMContentLoaded', () => {
             systemModeText.innerText = "Logged In (Saving to Cloud)";
             systemModeText.style.color = "var(--primary-color)";
             navTrends.classList.remove('hidden');
+
+            if (currentUser.startsWith("PAT-")) {
+                navFollowup.classList.remove('hidden');
+            } else {
+                navFollowup.classList.add('hidden');
+            }
         } else {
             loginModalBtn.classList.remove('hidden');
             loggedInUser.classList.add('hidden');
             systemModeText.innerText = "Guest Mode (No Data Saved)";
             systemModeText.style.color = "var(--text-muted)";
             navTrends.classList.add('hidden');
+            navFollowup.classList.add('hidden');
         }
     }
 
@@ -163,9 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Navigation Logic ---
     function showSection(sectionId, mode = null) {
         // Hide all
-        [uploadSection, processingSection, resultsSection, historySection, settingsSection, trendsSection].forEach(s => s.classList.add('hidden'));
+        [uploadSection, processingSection, resultsSection, historySection, settingsSection, trendsSection, followupSection].forEach(s => s.classList.add('hidden'));
         // Remove active class from nav
-        [navAnalyze, navPrescription, navHistory, navSettings, navTrends].forEach(n => n.classList.remove('active'));
+        [navAnalyze, navPrescription, navHistory, navSettings, navTrends, navFollowup].forEach(n => n.classList.remove('active'));
 
         if (mode) currentMode = mode;
 
@@ -189,6 +199,12 @@ document.addEventListener('DOMContentLoaded', () => {
             pageTitle.innerText = "Health Trends";
             pageSubtitle.innerText = "Track your historical lab metrics.";
             fetchTrends();
+        } else if (sectionId === 'followup') {
+            followupSection.classList.remove('hidden');
+            navFollowup.classList.add('active');
+            pageTitle.innerText = "Follow-up Dashboard";
+            pageSubtitle.innerText = "Live post-surgery recovery metrics and automated triage alerts.";
+            fetchFollowupDashboard();
         } else if (sectionId === 'history') {
             historySection.classList.remove('hidden');
             navHistory.classList.add('active');
@@ -207,11 +223,113 @@ document.addEventListener('DOMContentLoaded', () => {
     navAnalyze.addEventListener('click', () => showSection('upload', 'analyze'));
     navPrescription.addEventListener('click', () => showSection('upload', 'prescription'));
     navTrends.addEventListener('click', () => showSection('trends'));
+    navFollowup.addEventListener('click', () => showSection('followup'));
     navHistory.addEventListener('click', () => showSection('history'));
     navSettings.addEventListener('click', () => showSection('settings'));
 
+    if (navPortal) {
+        navPortal.addEventListener('click', () => {
+            window.location.href = '/portal/';
+        });
+    }
+
     const historyList = document.getElementById('historyList');
     const settingsForm = document.getElementById('settingsForm');
+    const followupList = document.getElementById('followupList');
+    const refreshFollowupBtn = document.getElementById('refreshFollowupBtn');
+    const triggerDemoCheckinBtn = document.getElementById('triggerDemoCheckinBtn');
+
+    if (refreshFollowupBtn) refreshFollowupBtn.addEventListener('click', fetchFollowupDashboard);
+    if (triggerDemoCheckinBtn) triggerDemoCheckinBtn.addEventListener('click', async () => {
+        triggerDemoCheckinBtn.disabled = true;
+        triggerDemoCheckinBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Triggering...';
+        try {
+            const formData = new URLSearchParams();
+            formData.append('patient_phone', '+12015550123'); // Demo patient
+            await fetch('/api/followup/test-trigger', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            });
+            setTimeout(fetchFollowupDashboard, 1000);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            triggerDemoCheckinBtn.disabled = false;
+            triggerDemoCheckinBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Stimulate Check-in (Demo)';
+        }
+    });
+
+    // --- Follow-up Dashboard Logic ---
+    async function fetchFollowupDashboard() {
+        if (!followupList) return;
+        followupList.innerHTML = '<div style="padding: 2rem; text-align: center;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p>Loading active patient data...</p></div>';
+        try {
+            const response = await fetch('/api/followup/dashboard');
+            const data = await response.json();
+            renderFollowupDashboard(data);
+        } catch (error) {
+            console.error('Followup Error:', error);
+            followupList.innerHTML = '<div style="padding: 2rem; text-align: center; color: red;">Failed to load patient data. Check console.</div>';
+        }
+    }
+
+    function renderFollowupDashboard(checkins) {
+        if (checkins.length === 0) {
+            followupList.innerHTML = '<div style="padding: 2rem; text-align: center;"><p class="text-muted">No active patients monitored currently.</p></div>';
+            return;
+        }
+
+        let html = `
+            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                    <tr style="background-color: #f1f5f9; border-bottom: 2px solid #e2e8f0;">
+                        <th style="padding: 1rem;">Patient</th>
+                        <th style="padding: 1rem;">Date</th>
+                        <th style="padding: 1rem;">Patient Reply (AI Assessed)</th>
+                        <th style="padding: 1rem;">Pain Level</th>
+                        <th style="padding: 1rem;">Symptoms Flagged</th>
+                        <th style="padding: 1rem;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        checkins.forEach(c => {
+            const date = new Date(c.date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const isAlert = c.requires_alert;
+            const bgClass = isAlert ? 'background-color: #fef2f2;' : '';
+            const statusBadge = isAlert
+                ? '<span class="badge" style="background-color: #ef4444; color: white;"><i class="fa-solid fa-triangle-exclamation"></i> Action Required</span>'
+                : '<span class="badge" style="background-color: #10b981; color: white;"><i class="fa-solid fa-check"></i> Normal</span>';
+            const painColor = c.pain_level >= 7 ? '#ef4444' : (c.pain_level >= 4 ? '#f59e0b' : '#10b981');
+
+            html += `
+                <tr style="border-bottom: 1px solid #e2e8f0; ${bgClass}">
+                    <td style="padding: 1rem;">
+                        <strong>${c.patient_name}</strong><br>
+                        <span style="font-size: 0.8rem; color: #64748b;">${c.phone_number}</span>
+                    </td>
+                    <td style="padding: 1rem; color: #64748b; font-size: 0.9rem;">${date}</td>
+                    <td style="padding: 1rem; max-width: 300px;">
+                        <span style="display: block; font-style: italic; margin-bottom: 0.5rem;">"${c.patient_response}"</span>
+                    </td>
+                    <td style="padding: 1rem;">
+                        <span style="font-weight: bold; font-size: 1.1rem; color: ${painColor}">${c.pain_level}/10</span>
+                    </td>
+                    <td style="padding: 1rem;">
+                        ${c.symptoms_flagged !== 'None' ? `<span style="color: #ef4444; font-weight: 500;">${c.symptoms_flagged}</span>` : '<span style="color: #94a3b8;">None</span>'}
+                    </td>
+                    <td style="padding: 1rem;">
+                        ${statusBadge}
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        followupList.innerHTML = html;
+    }
 
     // --- History Logic ---
     async function fetchHistory() {
