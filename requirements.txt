@@ -1,0 +1,7 @@
+streamlit
+azure-ai-formrecognizer
+openai
+python-dotenv
+fastapi
+uvicorn
+python-multipart

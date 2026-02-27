@@ -1,0 +1,17 @@
+{
+  "Hemoglobin": {
+    "unit": "g/dL",
+    "range": [13.5, 17.5],
+    "description": "Proteins in red blood cells that carry oxygen."
+  },
+  "Glucose": {
+    "unit": "mg/dL",
+    "range": [70, 99],
+    "description": "Blood sugar levels, a primary energy source."
+  },
+  "Cholesterol": {
+    "unit": "mg/dL",
+    "range": [125, 200],
+    "description": "Total cholesterol, including HDL and LDL."
+  }
+}

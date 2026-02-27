@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedSaathi Intelligence</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="brand">
+                <i class="fa-solid fa-heart-pulse logo-icon"></i>
+                <h2>MedSaathi</h2>
+            </div>
+
+            <ul class="nav-links">
+                <li id="nav-analyze" class="active"><i class="fa-solid fa-file-medical"></i> Analyze Report</li>
+                <li id="nav-history"><i class="fa-solid fa-clock-rotate-left"></i> History</li>
+                <li id="nav-settings"><i class="fa-solid fa-gear"></i> Settings</li>
+            </ul>
+
+            <div class="system-status">
+                <div class="status-indicator"></div>
+                <span>System Online</span>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header>
+                <h1>Lab Report Intelligence</h1>
+                <p>Upload your lab report for instant analysis and AI-powered insights.</p>
+            </header>
+
+            <!-- Upload Section -->
+            <section class="upload-section" id="uploadSection">
+                <div class="dropzone" id="dropzone">
+                    <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" hidden>
+                    <div class="upload-content">
+                        <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                        <h3>Drag & Drop your report</h3>
+                        <p>or click to browse files (PDF, PNG, JPG)</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Processing State -->
+            <section class="processing-section hidden" id="processingSection">
+                <div class="loader">
+                    <div class="pulse"></div>
+                    <i class="fa-solid fa-microscope text-primary"></i>
+                </div>
+                <h3>Analyzing Report...</h3>
+                <p>Extracting data, cross-referencing benchmarks, and generating AI insights.</p>
+            </section>
+
+            <!-- Result Section remains for Analyze -->
+
+            <!-- History Section -->
+            <section class="history-section hidden" id="historySection">
+                <header>
+                    <h1>Analysis History</h1>
+                    <p>Previously processed reports and their summaries.</p>
+                </header>
+                <div class="card">
+                    <div class="card-body" id="historyList">
+                        <!-- History items injected here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section class="settings-section hidden" id="settingsSection">
+                <header>
+                    <h1>Application Settings</h1>
+                    <p>Manage your account and app preferences.</p>
+                </header>
+                <div class="card">
+                    <div class="card-body">
+                        <form id="settingsForm">
+                            <div class="form-group" style="margin-bottom: 1.5rem;">
+                                <label
+                                    style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Appearance</label>
+                                <select name="theme" class="form-control"
+                                    style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                                    <option value="light">Light Mode</option>
+                                    <option value="dark">Dark Mode (Coming Soon)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 2rem;">
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" name="notifications" checked>
+                                    <span>Enable Notifications</span>
+                                </label>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save Settings</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+            <section class="results-section hidden" id="resultsSection">
+
+                <!-- Action Buttons -->
+                <div class="actions">
+                    <button class="btn btn-outline" id="resetBtn">
+                        <i class="fa-solid fa-rotate-left"></i> Analyze Another
+                    </button>
+                    <button class="btn btn-primary" onclick="window.print()">
+                        <i class="fa-solid fa-print"></i> Print Report
+                    </button>
+                </div>
+
+                <!-- AI Summary Card -->
+                <div class="card highlight-card ai-report-card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-robot"></i>
+                        <h2>AI Human-Friendly Summary</h2>
+                    </div>
+                    <div class="card-body" id="aiReportContent">
+                        <!-- AI content injected here -->
+                    </div>
+                </div>
+
+                <div class="results-grid">
+                    <!-- Flagged Values -->
+                    <div class="card flags-card">
+                        <div class="card-header">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <h2>Flagged Metrics</h2>
+                        </div>
+                        <div class="card-body" id="flagsContainer">
+                            <!-- Flags injected here -->
+                        </div>
+                    </div>
+
+                    <!-- Raw Extracted Tables -->
+                    <div class="card data-card">
+                        <div class="card-header">
+                            <i class="fa-solid fa-table-list"></i>
+                            <h2>Extracted Tables</h2>
+                        </div>
+                        <div class="card-body" id="tablesContainer">
+                            <!-- Tables injected here -->
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        </main>
+    </div>
+
+    <!-- Marked.js for parsing markdown from AI response -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
