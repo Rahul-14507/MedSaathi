@@ -23,6 +23,7 @@
 
             <ul class="nav-links">
                 <li id="nav-analyze" class="active"><i class="fa-solid fa-file-medical"></i> Analyze Report</li>
+                <li id="nav-prescription"><i class="fa-solid fa-pen-to-square"></i> Parse Prescription</li>
                 <li id="nav-history"><i class="fa-solid fa-clock-rotate-left"></i> History</li>
                 <li id="nav-settings"><i class="fa-solid fa-gear"></i> Settings</li>
             </ul>
@@ -36,17 +37,29 @@
         <!-- Main Content Area -->
         <main class="main-content">
             <header>
-                <h1>Lab Report Intelligence</h1>
-                <p>Upload your lab report for instant analysis and AI-powered insights.</p>
+                <h1 id="pageTitle">Lab Report Intelligence</h1>
+                <p id="pageSubtitle">Upload your lab report for instant analysis and AI-powered insights.</p>
             </header>
 
             <!-- Upload Section -->
             <section class="upload-section" id="uploadSection">
+                <div id="languageSelectorContainer" class="hidden"
+                    style="margin-bottom: 2rem; width: 100%; max-width: 600px; text-align: left;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Select Delivery
+                        Language</label>
+                    <select id="languageSelect" class="form-control"
+                        style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                        <option value="English">English</option>
+                        <option value="Hindi">Hindi</option>
+                        <option value="Telugu">Telugu</option>
+                    </select>
+                </div>
+
                 <div class="dropzone" id="dropzone">
                     <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" hidden>
                     <div class="upload-content">
                         <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
-                        <h3>Drag & Drop your report</h3>
+                        <h3>Drag & Drop your document</h3>
                         <p>or click to browse files (PDF, PNG, JPG)</p>
                     </div>
                 </div>
@@ -56,13 +69,103 @@
             <section class="processing-section hidden" id="processingSection">
                 <div class="loader">
                     <div class="pulse"></div>
-                    <i class="fa-solid fa-microscope text-primary"></i>
+                    <i class="fa-solid fa-microscope text-primary" id="processingIcon"></i>
                 </div>
-                <h3>Analyzing Report...</h3>
-                <p>Extracting data, cross-referencing benchmarks, and generating AI insights.</p>
+                <h3 id="processingTitle">Analyzing Document...</h3>
+                <p id="processingSubtitle">Extracting data, cross-referencing benchmarks, and generating AI insights.
+                </p>
             </section>
 
-            <!-- Result Section remains for Analyze -->
+            <!-- Results Section -->
+            <section class="results-section hidden" id="resultsSection">
+
+                <!-- Action Buttons -->
+                <div class="actions">
+                    <button class="btn btn-outline" id="resetBtn">
+                        <i class="fa-solid fa-rotate-left"></i> Process Another
+                    </button>
+                    <button class="btn btn-primary" onclick="window.print()">
+                        <i class="fa-solid fa-print"></i> Print
+                    </button>
+                </div>
+
+                <!-- Prescription Results -->
+                <div id="prescriptionResults" class="hidden">
+                    <div class="card highlight-card">
+                        <div class="card-header" style="justify-content: space-between;">
+                            <div style="display:flex; align-items:center; gap:0.75rem;">
+                                <i class="fa-solid fa-ear-listen" style="color:var(--primary-color)"></i>
+                                <h2>Audio Instructions</h2>
+                            </div>
+                        </div>
+                        <div class="card-body" style="text-align: center; background: #fafafa;">
+                            <audio id="audioPlayer" controls
+                                style="width: 100%; max-width: 400px; margin: 1rem 0;"></audio>
+                            <p class="text-muted" style="font-size: 0.875rem;">Listen to the simplified vernacular
+                                instructions.</p>
+                        </div>
+                    </div>
+
+                    <div class="results-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-language"></i>
+                                <h2>Vernacular Summary</h2>
+                            </div>
+                            <div class="card-body prose" id="translatedTextContent">
+                                <!-- Translated text injected here -->
+                            </div>
+                        </div>
+
+                        <div class="card data-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-file-signature"></i>
+                                <h2>Original Extraction (OCR)</h2>
+                            </div>
+                            <div class="card-body">
+                                <pre id="ocrTextContent"
+                                    style="white-space: pre-wrap; font-size: 0.875rem; color: #475569; background: #f8fafc; padding: 1rem; border-radius: 0.5rem;"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lab Report Results -->
+                <div id="labReportResults" class="hidden">
+                    <div class="card highlight-card ai-report-card">
+                        <div class="card-header">
+                            <i class="fa-solid fa-robot"></i>
+                            <h2>AI Human-Friendly Summary</h2>
+                        </div>
+                        <div class="card-body" id="aiReportContent">
+                            <!-- AI content injected here -->
+                        </div>
+                    </div>
+
+                    <div class="results-grid">
+                        <div class="card flags-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <h2>Flagged Metrics</h2>
+                            </div>
+                            <div class="card-body" id="flagsContainer">
+                                <!-- Flags injected here -->
+                            </div>
+                        </div>
+
+                        <div class="card data-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-table-list"></i>
+                                <h2>Extracted Tables</h2>
+                            </div>
+                            <div class="card-body" id="tablesContainer">
+                                <!-- Tables injected here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
 
             <!-- History Section -->
             <section class="history-section hidden" id="historySection">

@@ -3,5 +3,6 @@ azure-ai-formrecognizer
 openai
 python-dotenv
 fastapi
-uvicorn
+uvicorn azure-cognitiveservices-speech
 python-multipart
+azure-cognitiveservices-speech

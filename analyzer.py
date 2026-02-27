@@ -88,7 +88,45 @@ Please ensure the tone is professional yet empathetic and easy to understand for
 
     return response.choices[0].message.content
 
+def translate_and_simplify(raw_text, target_language):
+    """
+    Translates and simplifies prescription text into the target language (Hindi or Telugu) 
+    using Azure OpenAI, maintaining an empathetic tone.
+    """
+    client = AzureOpenAI(
+        api_key=os.getenv("AZURE_OPENAI_KEY"),
+        api_version="2024-02-01",
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+    )
+    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+
+    prompt = f"""
+You are an empathetic, highly skilled bilingual medical assistant.
+Your task is to review the following OCR-extracted text from a doctor's prescription and translate it into clear, simple {target_language}.
+
+Instructions:
+1. Identify all medication names and their prescribed dosages.
+2. Convert medical shorthand (e.g., '1-0-1', 'BD', 'TID') into simple vernacular instructions (e.g., 'Take one in the morning, zero in the afternoon, one at night').
+3. Ignore random noise, clinic headers, or doctor credentials unless relevant to the patient's immediate care.
+4. Maintain a supportive, empathetic, and calming tone to reduce patient anxiety.
+5. Provide the output as plain text suitable for Text-to-Speech (TTS) reading. Do not use markdown tables or complex formatting. Keep it conversational but structured.
+
+**Extracted Prescription Text:**
+{raw_text}
+"""
+
+    response = client.chat.completions.create(
+        model=deployment_name,
+        messages=[
+            {"role": "system", "content": f"You are a helpful medical assistant speaking in {target_language}."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.4
+    )
+
+    return response.choices[0].message.content
+
 if __name__ == "__main__":
     # Test loading
     benchmarks = load_benchmarks()
-    print(json.dumps(benchmarks, indent=2))
+    # print(json.dumps(benchmarks, indent=2))

@@ -48,6 +48,22 @@ def extract_text_from_file(file_content):
 
     return extracted_data
 
+def extract_prescription_text(file_content):
+    """
+    Extracts handwritten text from a prescription using Azure AI Document Intelligence (prebuilt-read).
+    """
+    client = get_document_analysis_client()
+    
+    # Use prebuilt-read for capturing handwritten text
+    poller = client.begin_analyze_document("prebuilt-read", document=file_content)
+    result = poller.result()
+
+    extracted_lines = []
+    for page in result.pages:
+        for line in page.lines:
+            extracted_lines.append(line.content)
+
+    return "\n".join(extracted_lines)
+
 if __name__ == "__main__":
-    # Quick test logic if needed
     pass

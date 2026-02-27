@@ -1,18 +1,18 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 import os
 import io
-from dotenv import load_dotenv
-
-from extractor import extract_text_from_file
-from analyzer import load_benchmarks, flag_values, generate_human_friendly_report
-
 import datetime
 import uuid
 import json
+import base64
+from dotenv import load_dotenv
 
-load_dotenv()
+from extractor import extract_text_from_file, extract_prescription_text
+from analyzer import load_benchmarks, flag_values, generate_human_friendly_report, translate_and_simplify
+from speech_engine import generate_audio
 
 app = FastAPI(title="Lab Report Intelligence API")
 
@@ -73,6 +73,56 @@ async def analyze_report(file: UploadFile = File(...)):
 
     except Exception as e:
         print(f"Analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/parse-prescription")
+async def parse_prescription(file: UploadFile = File(...), language: str = Form(...)):
+    if not os.getenv("AZURE_OPENAI_KEY") or not os.getenv("AZURE_DOC_INTEL_KEY") or not os.getenv("AZURE_SPEECH_KEY"):
+        raise HTTPException(status_code=500, detail="Azure credentials are not configured properly.")
+
+    try:
+        file_content = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read file: {e}")
+
+    try:
+        # Step 1: Extract handwriting
+        ocr_text = extract_prescription_text(file_content)
+
+        # Step 2: Translate and simplify
+        translated_text = translate_and_simplify(ocr_text, language)
+
+        # Step 3: Generate Audio
+        audio_bytes = generate_audio(translated_text, language)
+        
+        # Base64 encode audio so frontend can play it easily without separate URL
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8') if audio_bytes else None
+
+        response_data = {
+            "status": "success",
+            "ocr_text": ocr_text,
+            "translated_text": translated_text,
+            "audio_base64": audio_base64,
+            "language": language
+        }
+        
+        # Optional: Save to history
+        report_id = str(uuid.uuid4())
+        history = load_json(HISTORY_FILE)
+        history.insert(0, {
+            "id": report_id,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "filename": file.filename,
+            "type": "prescription",
+            "language": language,
+            "translated_text": translated_text
+        })
+        save_json(HISTORY_FILE, history[:50])
+
+        return JSONResponse(content=response_data)
+
+    except Exception as e:
+        print(f"Prescription parsing failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/history")
