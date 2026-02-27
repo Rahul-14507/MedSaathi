@@ -15,6 +15,8 @@ def flag_values(extracted_text, benchmarks):
     Scans the extracted text for benchmarked medical parameters and flags values outside the normal range.
     """
     flags = []
+    seen_metrics = set()
+    
     # Combine all text for easier searching
     all_text = " ".join(extracted_text.get("text_lines", []))
     for table in extracted_text.get("tables", []):
@@ -22,12 +24,17 @@ def flag_values(extracted_text, benchmarks):
             all_text += " " + " ".join(row)
 
     for item, info in benchmarks.items():
+        if item in seen_metrics:
+            continue
+            
         # Simple regex to find the item and a following number
-        # Note: In a real scenario, this might need more robust parsing (e.g., table structure awareness)
         pattern = re.compile(rf"{item}[:\s]*(\d+\.?\d*)", re.IGNORECASE)
         matches = pattern.findall(all_text)
         
         for match in matches:
+            if item in seen_metrics:
+                break # Only process the first match for a given metric
+                
             value = float(match)
             low, high = info["range"]
             if value < low or value > high:
@@ -40,6 +47,7 @@ def flag_values(extracted_text, benchmarks):
                     "status": status,
                     "description": info["description"]
                 })
+                seen_metrics.add(item)
     return flags
 
 def generate_human_friendly_report(extracted_text, flagged_data):
@@ -63,18 +71,20 @@ def generate_human_friendly_report(extracted_text, flagged_data):
 
     prompt = f"""
 You are a Medical Intelligence Assistant. Analyze the following lab report data and the flagged abnormalities.
+Your key objectives are to make the lab report understandable to the patient and to reduce patient anxiety through clarity.
+
 Generate a 'Human-Friendly Report' with three clear sections:
-1. **Status**: A quick overview of the health status based on these results.
-2. **Simple Explanation**: Explain what the flagged values mean in plain English.
-3. **Action Items**: Recommended next steps or questions for the user to ask their doctor.
+1. **Health Overview**: A quick, calming overview of the health status based on these results.
+2. **Highlighted Abnormalities**: Clearly highlight each flagged abnormal value, compare it against standard medical benchmarks provided, and explain what the value means for the patient in plain English.
+3. **Recommended Actions**: Calmly recommended next steps or questions for the user to ask their doctor to reduce anxiety and clarify their path forward.
 
 **Extracted Raw Data:**
 {full_text}
 
-**Flagged Abnormalities:**
+**Flagged Abnormalities (with Benchmarks):**
 {json.dumps(flagged_data, indent=2)}
 
-Please ensure the tone is professional yet empathetic and easy to understand for a non-medical person.
+Please ensure the tone is professional yet highly empathetic, reassuring, and easy to understand for a non-medical person.
 """
 
     response = client.chat.completions.create(
@@ -106,14 +116,17 @@ Your task is to review the following OCR-extracted text from a doctor's prescrip
 
 Instructions:
 1. Identify all medication names and their prescribed dosages. If the doctor used abbreviations or shorthand for a medicine (e.g. "Do" instead of "Dolo 650", "Para" instead of "Paracetamol"), infer and write out the FULL, correct medicine name based on your medical knowledge.
-2. Convert medical shorthand (e.g., '1-0-1', 'BD', 'TID') into simple vernacular instructions (e.g., 'Take one in the morning, zero in the afternoon, one at night').
-3. Ignore random noise, clinic headers, or doctor credentials unless relevant to the patient's immediate care.
-4. Maintain a supportive, empathetic, and calming tone to reduce patient anxiety.
-5. Provide the output as pure text suitable for Text-to-Speech (TTS) reading. DO NOT use any markdown formatting characters under any circumstances (such as **, *, --, or #). Keep it conversational but structured in plain text only.
+2. Briefly EXPLAIN what each medicine is generally used for (e.g., "for pain relief" or "for your blood pressure") in simple, non-medical terms. Translate and simplify any complex medical terminology.
+3. Convert medical shorthand (e.g., '1-0-1', 'BD', 'TID') into simple, very clear vernacular instructions (e.g., 'Take one pill in the morning, and one at night').
+4. Ignore random noise, clinic headers, or doctor credentials unless relevant to the patient's immediate care.
+5. Maintain a supportive, empathetic, and calming tone to reduce patient anxiety, speaking directly to the patient about their medications.
+6. Provide the output as pure plain text suitable for Text-to-Speech (TTS) reading. DO NOT use any markdown formatting characters under any circumstances. You MUST NOT use asterisks (**) to bold medication names or anything else. Write everything plainly in pure text.
+7. CRITICAL: Start directly with the medication instructions. Absolutely DO NOT include any conversational filler, warm introductions, greetings, or conclusions like "Hello!", "Here is the translation", or "Let me help you". The string you return will be sent directly to a text-to-speech engine, so any conversational wrapper text will ruin the presentation.
 
 **Extracted Prescription Text:**
 {raw_text}
 """
+
     response = client.chat.completions.create(
         model=deployment_name,
         messages=[

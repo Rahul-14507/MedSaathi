@@ -6,7 +6,7 @@
     --text-main: #0f172a;
     --text-muted: #64748b;
     --border-color: #e2e8f0;
-    
+
     /* Semantic Colors */
     --success-bg: #dcfce7;
     --success-text: #166534;
@@ -207,7 +207,8 @@ header p {
     text-align: center;
 }
 
-.dropzone:hover, .dropzone.dragover {
+.dropzone:hover,
+.dropzone.dragover {
     background: rgba(14, 165, 233, 0.08);
     transform: scale(1.02);
     box-shadow: var(--shadow-md);
@@ -263,9 +264,20 @@ header p {
 }
 
 @keyframes pulse {
-    0% { transform: scale(0.8); opacity: 0.4; }
-    50% { transform: scale(1.2); opacity: 0; }
-    100% { transform: scale(0.8); opacity: 0; }
+    0% {
+        transform: scale(0.8);
+        opacity: 0.4;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
 }
 
 .processing-section h3 {
@@ -300,19 +312,28 @@ header p {
     background: var(--danger-bg);
     border-left-color: var(--danger-text);
 }
-.flag-high .flag-title { color: var(--danger-text); }
+
+.flag-high .flag-title {
+    color: var(--danger-text);
+}
 
 .flag-low {
     background: var(--warning-bg);
     border-left-color: var(--warning-text);
 }
-.flag-low .flag-title { color: var(--warning-text); }
+
+.flag-low .flag-title {
+    color: var(--warning-text);
+}
 
 .flag-normal {
     background: var(--success-bg);
     border-left-color: var(--success-text);
 }
-.flag-normal .flag-title { color: var(--success-text); }
+
+.flag-normal .flag-title {
+    color: var(--success-text);
+}
 
 .flag-header {
     display: flex;
@@ -349,7 +370,8 @@ table {
     font-size: 0.875rem;
 }
 
-th, td {
+th,
+td {
     padding: 0.75rem 1rem;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
@@ -365,7 +387,7 @@ th {
 }
 
 tr:hover {
-    background: rgba(0,0,0,0.01);
+    background: rgba(0, 0, 0, 0.01);
 }
 
 /* AI Report Formatting */
@@ -377,22 +399,30 @@ tr:hover {
     line-height: 1.7;
 }
 
-.prose h1, .prose h2, .prose h3 {
+.prose h1,
+.prose h2,
+.prose h3 {
     color: var(--text-main);
     margin-top: 1.5rem;
     margin-bottom: 0.75rem;
     font-weight: 600;
 }
 
-.prose h2 { font-size: 1.5rem; }
-.prose h3 { font-size: 1.25rem; }
+.prose h2 {
+    font-size: 1.5rem;
+}
+
+.prose h3 {
+    font-size: 1.25rem;
+}
 
 .prose p {
     margin-bottom: 1rem;
     color: #334155;
 }
 
-.prose ul, .prose ol {
+.prose ul,
+.prose ol {
     margin-bottom: 1rem;
     padding-left: 1.5rem;
     color: #334155;
@@ -446,4 +476,68 @@ tr:hover {
 
 .btn-outline:hover {
     background: var(--bg-color);
+}
+
+/* --- Print Styles --- */
+@media print {
+
+    /* Hide all non-essential UI elements */
+    .sidebar,
+    header,
+    .upload-section,
+    .actions,
+    .processing-section,
+    .settings-section,
+    .trends-section,
+    .history-section,
+    #languageSelectorContainer,
+    #audioPlayer {
+        display: none !important;
+    }
+
+    /* Expand the main content to take up the full printed page */
+    .app-container {
+        display: block !important;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    /* Ensure results are visible */
+    .results-section {
+        display: block !important;
+    }
+
+    /* Print-specific visual optimizations */
+    body {
+        background-color: white !important;
+        color: black !important;
+    }
+
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+        border-radius: 0 !important;
+        margin-bottom: 2rem !important;
+        page-break-inside: avoid;
+    }
+
+    .card-header {
+        background-color: #f8fafc !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Hide background colors on flags for printer ink saving, just keep borders */
+    .flag-high,
+    .flag-low,
+    .flag-normal {
+        background: transparent !important;
+        border: 1px solid #ccc !important;
+        border-left-width: 4px !important;
+    }
 }

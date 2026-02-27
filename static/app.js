@@ -1,7 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Auth State
+    let authToken = localStorage.getItem('medsaathi_token');
+    let currentUser = localStorage.getItem('medsaathi_user');
+
     // Nav Elements
     const navAnalyze = document.getElementById('nav-analyze');
     const navPrescription = document.getElementById('nav-prescription');
+    const navTrends = document.getElementById('nav-trends');
     const navHistory = document.getElementById('nav-history');
     const navSettings = document.getElementById('nav-settings');
 
@@ -37,13 +42,130 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // State
     let currentMode = 'analyze'; // 'analyze' or 'prescription'
+    let isRegistering = false;
+    let trendsChart = null;
+
+    const trendsSection = document.getElementById('trendsSection');
+
+    // Auth UI Elements
+    const authContainer = document.getElementById('authContainer');
+    const loginModalBtn = document.getElementById('loginModalBtn');
+    const loggedInUser = document.getElementById('loggedInUser');
+    const usernameDisplay = document.getElementById('usernameDisplay');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const systemModeText = document.getElementById('systemModeText');
+
+    const authModalOverlay = document.getElementById('authModalOverlay');
+    const closeAuthModal = document.getElementById('closeAuthModal');
+    const authForm = document.getElementById('authForm');
+    const authUsername = document.getElementById('authUsername');
+    const authPassword = document.getElementById('authPassword');
+    const authTitle = document.getElementById('authModalTitle');
+    const authSubmitBtn = document.getElementById('authSubmitBtn');
+    const authToggleLink = document.getElementById('authToggleLink');
+    const authToggleText = document.getElementById('authToggleText');
+
+    // --- Auth Logic ---
+    function updateAuthState() {
+        if (authToken && currentUser) {
+            loginModalBtn.classList.add('hidden');
+            loggedInUser.classList.remove('hidden');
+            usernameDisplay.innerText = currentUser;
+            systemModeText.innerText = "Logged In (Saving to Cloud)";
+            systemModeText.style.color = "var(--primary-color)";
+            navTrends.classList.remove('hidden');
+        } else {
+            loginModalBtn.classList.remove('hidden');
+            loggedInUser.classList.add('hidden');
+            systemModeText.innerText = "Guest Mode (No Data Saved)";
+            systemModeText.style.color = "var(--text-muted)";
+            navTrends.classList.add('hidden');
+        }
+    }
+
+    loginModalBtn.addEventListener('click', () => {
+        isRegistering = false;
+        authTitle.innerText = "Login";
+        authSubmitBtn.innerText = "Login";
+        authToggleText.innerText = "Need an account?";
+        authToggleLink.innerText = "Register here";
+        authModalOverlay.classList.remove('hidden');
+    });
+
+    closeAuthModal.addEventListener('click', () => authModalOverlay.classList.add('hidden'));
+
+    authToggleLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        isRegistering = !isRegistering;
+        if (isRegistering) {
+            authTitle.innerText = "Register";
+            authSubmitBtn.innerText = "Create Account";
+            authToggleText.innerText = "Already have an account?";
+            authToggleLink.innerText = "Login here";
+        } else {
+            authTitle.innerText = "Login";
+            authSubmitBtn.innerText = "Login";
+            authToggleText.innerText = "Need an account?";
+            authToggleLink.innerText = "Register here";
+        }
+    });
+
+    authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = authUsername.value;
+        const password = authPassword.value;
+        const endpoint = isRegistering ? '/api/auth/register' : '/api/auth/login';
+
+        const formData = new URLSearchParams();
+        formData.append('username', username);
+        formData.append('password', password);
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "Authentication failed");
+            }
+
+            const data = await response.json();
+            localStorage.setItem('medsaathi_token', data.access_token);
+            localStorage.setItem('medsaathi_user', data.user.username);
+            authToken = data.access_token;
+            currentUser = data.user.username;
+
+            updateAuthState();
+            authModalOverlay.classList.add('hidden');
+            authForm.reset();
+            alert(`Welcome, ${currentUser}!`);
+
+        } catch (error) {
+            alert(error.message);
+        }
+    });
+
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('medsaathi_token');
+        localStorage.removeItem('medsaathi_user');
+        authToken = null;
+        currentUser = null;
+        updateAuthState();
+        showSection('upload', 'analyze');
+    });
+
+    // Run auth check on load
+    updateAuthState();
 
     // --- Navigation Logic ---
     function showSection(sectionId, mode = null) {
         // Hide all
-        [uploadSection, processingSection, resultsSection, historySection, settingsSection].forEach(s => s.classList.add('hidden'));
+        [uploadSection, processingSection, resultsSection, historySection, settingsSection, trendsSection].forEach(s => s.classList.add('hidden'));
         // Remove active class from nav
-        [navAnalyze, navPrescription, navHistory, navSettings].forEach(n => n.classList.remove('active'));
+        [navAnalyze, navPrescription, navHistory, navSettings, navTrends].forEach(n => n.classList.remove('active'));
 
         if (mode) currentMode = mode;
 
@@ -61,6 +183,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 pageSubtitle.innerText = "Upload a handwritten prescription to get simplified vernacular instructions and audio.";
                 languageSelectorContainer.classList.remove('hidden');
             }
+        } else if (sectionId === 'trends') {
+            trendsSection.classList.remove('hidden');
+            navTrends.classList.add('active');
+            pageTitle.innerText = "Health Trends";
+            pageSubtitle.innerText = "Track your historical lab metrics.";
+            fetchTrends();
         } else if (sectionId === 'history') {
             historySection.classList.remove('hidden');
             navHistory.classList.add('active');
@@ -78,6 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     navAnalyze.addEventListener('click', () => showSection('upload', 'analyze'));
     navPrescription.addEventListener('click', () => showSection('upload', 'prescription'));
+    navTrends.addEventListener('click', () => showSection('trends'));
     navHistory.addEventListener('click', () => showSection('history'));
     navSettings.addEventListener('click', () => showSection('settings'));
 
@@ -88,7 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchHistory() {
         historyList.innerHTML = '<p class="text-muted">Loading history...</p>';
         try {
-            const response = await fetch('/api/history');
+            const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+            const response = await fetch('/api/history', { headers });
             const data = await response.json();
             renderHistory(data);
         } catch (error) {
@@ -207,7 +337,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append('language', languageSelect.value);
             }
 
-            const response = await fetch(endpoint, { method: 'POST', body: formData });
+            const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+            const response = await fetch(endpoint, { method: 'POST', body: formData, headers });
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.detail || 'Analysis failed');
@@ -306,6 +437,69 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } else {
             tablesContainer.innerHTML = '<p class="text-muted">No structured tables extracted.</p>';
+        }
+    }
+
+    // --- Wow Factor 1: Trends Fetching ---
+    async function fetchTrends() {
+        const chartsContainer = document.getElementById('chartsContainer');
+        chartsContainer.innerHTML = '<p class="text-muted">Loading trends...</p>';
+        try {
+            const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+            const response = await fetch('/api/trends', { headers });
+
+            if (!response.ok) throw new Error("Failed to load trends");
+            const data = await response.json();
+
+            chartsContainer.innerHTML = '';
+
+            if (Object.keys(data).length === 0) {
+                chartsContainer.innerHTML = '<p class="text-muted">No historical data available to plot trends yet. Upload some lab reports!</p>';
+                return;
+            }
+
+            let canvasIndex = 0;
+            for (const [metric, info] of Object.entries(data)) {
+                if (info.values.length < 2) continue; // Skip if less than 2 points
+
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = `
+                    <div style="background: white; padding: 1.5rem; border-radius: 0.5rem; border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+                        <h3 style="margin-top:0; color:var(--primary-color)">${metric} Trends (${info.unit})</h3>
+                        <canvas id="chart_${canvasIndex}" width="400" height="200"></canvas>
+                    </div>
+                `;
+                chartsContainer.appendChild(wrapper);
+
+                const ctx = document.getElementById(`chart_${canvasIndex}`).getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: info.dates.map(d => new Date(d).toLocaleDateString()),
+                        datasets: [{
+                            label: metric,
+                            data: info.values,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#10b981'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: { y: { beginAtZero: false } }
+                    }
+                });
+                canvasIndex++;
+            }
+            if (canvasIndex === 0) {
+                chartsContainer.innerHTML = '<p class="text-muted">Not enough data points to plot line graphs yet. Upload more reports over time.</p>';
+            }
+        } catch (error) {
+            chartsContainer.innerHTML = `<p class="text-danger">${error.message}</p>`;
         }
     }
 
