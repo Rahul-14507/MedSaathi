@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auth State
     let authToken = localStorage.getItem('medsaathi_token');
     let currentUser = localStorage.getItem('medsaathi_user');
+    let currentUserNumericId = null;
 
     // Nav Elements
     const navAnalyze = document.getElementById('nav-analyze');
@@ -80,6 +81,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (currentUser.startsWith("PAT-")) {
                 navFollowup.classList.remove('hidden');
+                if (!currentUserNumericId) {
+                    currentUserNumericId = localStorage.getItem('medsaathi_user_id');
+                }
             } else {
                 navFollowup.classList.add('hidden');
             }
@@ -145,8 +149,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             localStorage.setItem('medsaathi_token', data.access_token);
             localStorage.setItem('medsaathi_user', data.user.username);
+            if (data.user.id) localStorage.setItem('medsaathi_user_id', data.user.id);
             authToken = data.access_token;
             currentUser = data.user.username;
+            currentUserNumericId = data.user.id || null;
 
             updateAuthState();
             authModalOverlay.classList.add('hidden');
@@ -238,6 +244,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const followupList = document.getElementById('followupList');
     const refreshFollowupBtn = document.getElementById('refreshFollowupBtn');
     const triggerDemoCheckinBtn = document.getElementById('triggerDemoCheckinBtn');
+    const printAdmissionBtn = document.getElementById('printAdmissionBtn');
+    const messageDoctorBtn = document.getElementById('messageDoctorBtn');
+
+    // Message Modal Elements
+    const messageModal = document.getElementById('messageModal');
+    const closeMessageModal = document.getElementById('closeMessageModal');
+    const messageHistoryContainer = document.getElementById('messageHistory');
+    const messageInput = document.getElementById('messageInput');
+    const sendMessageBtn = document.getElementById('sendMessageBtn');
+    let messagePollingInterval = null;
 
     if (refreshFollowupBtn) refreshFollowupBtn.addEventListener('click', fetchFollowupDashboard);
     if (triggerDemoCheckinBtn) triggerDemoCheckinBtn.addEventListener('click', async () => {
@@ -330,6 +346,184 @@ document.addEventListener('DOMContentLoaded', () => {
         html += `</tbody></table>`;
         followupList.innerHTML = html;
     }
+
+    // --- Print Admission Logic ---
+    if (printAdmissionBtn) {
+        printAdmissionBtn.addEventListener('click', async () => {
+            if (!currentUser || !currentUser.startsWith("PAT-")) {
+                alert("Only logged-in patients can print admission reports.");
+                return;
+            }
+
+            try {
+                // 1. Resolve PAT-ID to internal Patient ID
+                printAdmissionBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Preparing...';
+                printAdmissionBtn.disabled = true;
+
+                const searchRes = await fetch(`/api/patients/search?query=${encodeURIComponent(currentUser)}`);
+                if (!searchRes.ok) throw new Error("Failed to search patient");
+                const patients = await searchRes.json();
+
+                if (!patients || patients.length === 0) {
+                    throw new Error("Patient record not found.");
+                }
+                const patient = patients[0];
+
+                // 2. Fetch specific Patient Details (Visits & Actions)
+                const detailsRes = await fetch(`/api/patients/${patient.id}/details`);
+                if (!detailsRes.ok) throw new Error("Failed to fetch patient details");
+                const details = await detailsRes.json();
+
+                // 3. Extract the most recent visit
+                const recentVisitObj = details.visits && details.visits.length > 0 ? details.visits[0] : null;
+
+                // 4. Map to Print Template
+                document.getElementById('printPatientName').textContent = patient.name;
+
+                // Calculate age
+                const dob = new Date(patient.dob);
+                const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+                document.getElementById('printDobAge').textContent = `${dob.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} (${age}y)`;
+
+                document.getElementById('printGender').textContent = patient.gender || '--';
+                document.getElementById('printBloodGroup').textContent = patient.bloodGroup || '--';
+                document.getElementById('printContact').textContent = patient.contact || '--';
+
+                // Set generated date
+                document.getElementById('printGeneratedDate').textContent = `Generated on: ${new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+
+                if (recentVisitObj) {
+                    document.getElementById('printOrgName').textContent = recentVisitObj.orgName || "Clinical Admission";
+                    document.getElementById('printDoctorName').textContent = recentVisitObj.staffName || "Not Assigned";
+
+                    const vitals = recentVisitObj.visit?.vitals || {};
+                    document.getElementById('printVitalsBp').textContent = vitals.bp || '--';
+                    document.getElementById('printVitalsHr').textContent = vitals.hr || '--';
+                    document.getElementById('printVitalsTemp').textContent = vitals.temp || '--';
+                    document.getElementById('printVitalsWt').textContent = vitals.weight ? `${vitals.weight}kg` : '--';
+                    document.getElementById('printVitalsSpo2').textContent = vitals.spo2 ? `${vitals.spo2}%` : '--';
+                } else {
+                    document.getElementById('printOrgName').textContent = "Clinical Admission";
+                    document.getElementById('printDoctorName').textContent = "Not Assigned";
+                }
+
+                // 5. Generate Barcode
+                if (window.JsBarcode) {
+                    JsBarcode("#printBarcode", patient.uniqueId, {
+                        width: 1.5,
+                        height: 40,
+                        fontSize: 14,
+                        displayValue: true,
+                        background: "transparent"
+                    });
+                }
+
+                // 6. Trigger Browser Print
+                // A small delay ensures the DOM/Barcode is fully rendered before printing
+                setTimeout(() => {
+                    window.print();
+                    printAdmissionBtn.innerHTML = '<i class="fa-solid fa-print"></i> Print Admission Report';
+                    printAdmissionBtn.disabled = false;
+                }, 300);
+
+            } catch (err) {
+                console.error("Print Error:", err);
+                alert("Could not generate the admission report. " + err.message);
+                printAdmissionBtn.innerHTML = '<i class="fa-solid fa-print"></i> Print Admission Report';
+                printAdmissionBtn.disabled = false;
+            }
+        });
+    }
+
+    // --- Messaging Logic ---
+    async function loadMessages() {
+        if (!currentUserNumericId) return;
+        try {
+            const res = await fetch(`/api/messages/${currentUserNumericId}`);
+            if (!res.ok) throw new Error("Failed to load messages");
+            const messages = await res.json();
+
+            messageHistoryContainer.innerHTML = '';
+            if (messages.length === 0) {
+                messageHistoryContainer.innerHTML = '<p class="text-muted" style="text-align:center; margin-top: 2rem;">No messages yet. Start a conversation with your doctor.</p>';
+                return;
+            }
+
+            messages.forEach(msg => {
+                const isSentByMe = msg.sender === 'patient';
+                const el = document.createElement('div');
+                el.className = `chat-bubble ${isSentByMe ? 'sent' : 'received'}`;
+                el.innerHTML = `
+                    <div>${msg.content}</div>
+                    <span class="chat-time">${new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                `;
+                messageHistoryContainer.appendChild(el);
+            });
+            messageHistoryContainer.scrollTop = messageHistoryContainer.scrollHeight;
+        } catch (e) {
+            console.error("Error loading messages:", e);
+        }
+    }
+
+    async function sendMessage() {
+        const text = messageInput.value.trim();
+        if (!text || !currentUserNumericId) return;
+
+        try {
+            sendMessageBtn.disabled = true;
+            const res = await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    patientId: currentUserNumericId,
+                    doctorId: null, // Backend will infer from latest visit
+                    sender: 'patient',
+                    content: text
+                })
+            });
+            if (!res.ok) throw new Error("Failed to send");
+            messageInput.value = '';
+            await loadMessages();
+        } catch (e) {
+            alert(e.message);
+        } finally {
+            sendMessageBtn.disabled = false;
+        }
+    }
+
+    if (messageDoctorBtn) {
+        messageDoctorBtn.addEventListener('click', async () => {
+            if (!currentUserNumericId) {
+                const parts = currentUser?.split('-') || [];
+                if (parts.length === 2 && !isNaN(parts[1])) {
+                    currentUserNumericId = parseInt(parts[1]);
+                } else {
+                    alert("Please Login first.");
+                    return;
+                }
+            }
+            messageModal.classList.remove('hidden');
+            await loadMessages();
+            // Start polling for new messages when modal is open
+            if (messagePollingInterval) clearInterval(messagePollingInterval);
+            messagePollingInterval = setInterval(loadMessages, 3000);
+
+            // Mark as read
+            fetch(`/api/messages/read?patientId=${currentUserNumericId}&doctorId=0&reader=patient`, { method: 'POST' }).catch(console.error);
+        });
+    }
+
+    if (closeMessageModal) {
+        closeMessageModal.addEventListener('click', () => {
+            messageModal.classList.add('hidden');
+            if (messagePollingInterval) clearInterval(messagePollingInterval);
+        });
+    }
+
+    if (sendMessageBtn) sendMessageBtn.addEventListener('click', sendMessage);
+    if (messageInput) messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
 
     // --- History Logic ---
     async function fetchHistory() {

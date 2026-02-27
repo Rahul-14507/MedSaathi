@@ -1,7 +1,7 @@
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 import os
 import io
 import datetime
@@ -9,24 +9,22 @@ import uuid
 import json
 import base64
 from dotenv import load_dotenv
-
-from extractor import extract_text_from_file, extract_prescription_text
-from analyzer import load_benchmarks, flag_values, generate_human_friendly_report, translate_and_simplify
-from speech_engine import generate_audio
-from db import get_db
-from auth import router as auth_router, get_current_user_optional, get_current_user
 from fastapi import Depends
-from fastapi.responses import FileResponse
 
-# Follow-up Agent imports
-import followup_db
-from followup_analyzer import evaluate_patient_response
-from twilio_client import twilio_agent
-import mediconnect_api
+# Internal module imports
+from app.intelligence.extractor import extract_text_from_file, extract_prescription_text
+from app.intelligence.analyzer import load_benchmarks, flag_values, generate_human_friendly_report, translate_and_simplify
+from app.intelligence.speech import generate_audio
+from app.auth.cosmos import get_db
+from app.auth.routes import router as auth_router, get_current_user_optional, get_current_user
+from app.followup import database as followup_db
+from app.followup.analyzer import evaluate_patient_response
+from app.followup.twilio import twilio_agent
+from app.mediconnect import api as mediconnect_api
 
-app = FastAPI(title="Lab Report Intelligence API")
+app = FastAPI(title="MedSaathi — Lab Report Intelligence API")
 
-# Include Auth Router
+# Include Routers
 app.include_router(auth_router)
 app.include_router(mediconnect_api.router)
 
@@ -69,6 +67,8 @@ def save_json(file_path, data):
         json.dump(data, f, indent=4)
 
 app.mount("/app", StaticFiles(directory="static", html=True), name="static")
+
+# ─── AI Intelligence Endpoints ────────────────────────────────────────────
 
 @app.post("/api/analyze")
 async def analyze_report(
@@ -114,7 +114,7 @@ async def analyze_report(
                 }
                 db["reports"].create_item(body=cosmos_record)
                 
-                # Wow Factor 1 Preparation: Save discrete metrics for trends
+                # Save discrete metrics for trends
                 if db.get("metrics") and flags:
                     for flag in flags:
                         metric_doc = {
@@ -233,7 +233,7 @@ async def update_settings(settings: dict):
 
 @app.get("/api/trends")
 async def get_trends(current_user: dict = Depends(get_current_user)):
-    """Wow Factor 1: Fetch historical lab metrics for charting."""
+    """Fetch historical lab metrics for charting."""
     db = get_db()
     if not db.get("metrics"):
         raise HTTPException(status_code=500, detail="Database not configured")
@@ -253,7 +253,7 @@ async def get_trends(current_user: dict = Depends(get_current_user)):
         
     return trends
 
-# --- Autonomous Patient Follow-up Agent Endpoints ---
+# ─── Autonomous Patient Follow-up Agent Endpoints ─────────────────────────
 
 @app.post("/api/followup/test-trigger")
 def trigger_followup(patient_phone: str = Form(...)):
@@ -267,7 +267,6 @@ def trigger_followup(patient_phone: str = Form(...)):
     msg = f"Hello {patient['name']}, this is your post-surgery check-in. On a scale of 1-10, what is your pain level today? Are you experiencing any new swelling, redness, or fever?"
     twilio_agent.send_message(patient['phone_number'], msg)
     
-    # Normally we wouldn't add a check-in record until they reply, but for demo tracking we log the outbound.
     return {"status": "Message sparked", "patient": patient['name']}
 
 @app.post("/api/followup/webhook")
@@ -279,7 +278,7 @@ def twilio_webhook(From: str = Form(""), Body: str = Form("")):
     # Identify patient
     patient = followup_db.get_patient_by_phone(from_number)
     
-    # If this is an unknown number but we're in mock mode, fallback to the latest patient for demo ease
+    # If this is an unknown number, fallback to the latest patient for demo ease
     if not patient:
         patients = followup_db.get_all_patients()
         if patients:
@@ -303,13 +302,10 @@ def twilio_webhook(From: str = Form(""), Body: str = Form("")):
     # Trigger Doctor Alert if required
     if analysis.get('requires_alert'):
         alert_msg = f"🚨 URGENT: Patient {patient['name']} reported high pain ({analysis.get('pain_level')}/10) or dangerous symptoms: {analysis.get('symptoms_flagged')}."
-        # Theoretically send to patient['doctor_phone'], but route to console/mock twilio for safety
         twilio_agent.send_message(patient['doctor_phone'] or "+19999999999", alert_msg)
         
-        # Sent immediate auto-reply to patient assuring them the doctor was notified
         twilio_agent.send_message(patient['phone_number'], "Thank you for the update. We have alerted your doctor about your symptoms and they will contact you shortly.")
     else:
-        # Standard acknowledgement
         twilio_agent.send_message(patient['phone_number'], "Thank you for your update. Your recovery seems to be on track. Have a good day!")
         
     return JSONResponse({"status": "received"})
@@ -321,4 +317,4 @@ def get_dashboard():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

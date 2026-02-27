@@ -1,9 +1,10 @@
 import sqlite3
 import json
+from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-DATABASE_URL = "mediconnect.db"
+DATABASE_URL = str(Path(__file__).parent.parent.parent / "data" / "mediconnect.db")
 
 def init_db():
     conn = sqlite3.connect(DATABASE_URL)
@@ -95,6 +96,21 @@ def init_db():
         )
     ''')
 
+    # 6. Messages (Patient-Doctor Communication)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            doctor_id INTEGER NOT NULL,
+            sender TEXT NOT NULL, -- 'patient' or 'doctor'
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            is_read BOOLEAN DEFAULT 0,
+            FOREIGN KEY (patient_id) REFERENCES patients(id),
+            FOREIGN KEY (doctor_id) REFERENCES users(id)
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -109,6 +125,60 @@ def get_db():
     conn = sqlite3.connect(DATABASE_URL)
     conn.row_factory = dict_factory
     return conn
+
+# --- Messages ---
+def create_message(patient_id: int, doctor_id: int, sender: str, content: str) -> Dict:
+    conn = get_db()
+    c = conn.cursor()
+    created_at = datetime.utcnow().isoformat() + "Z"
+    c.execute(
+        "INSERT INTO messages (patient_id, doctor_id, sender, content, created_at) VALUES (?, ?, ?, ?, ?) RETURNING *",
+        (patient_id, doctor_id, sender, content, created_at)
+    )
+    row = c.fetchone()
+    conn.commit()
+    conn.close()
+    return row
+
+def get_messages_by_patient(patient_id: int) -> List[Dict]:
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM messages WHERE patient_id = ? ORDER BY datetime(created_at) ASC",
+        (patient_id,)
+    )
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def get_messages_for_doctor(doctor_id: int) -> List[Dict]:
+    conn = get_db()
+    c = conn.cursor()
+    # Fetch latest message per patient for the doctor's inbox view
+    c.execute('''
+        SELECT m.*, p.name as patient_name, p.unique_id as patient_unique_id 
+        FROM messages m
+        JOIN patients p ON m.patient_id = p.id
+        WHERE m.id IN (
+            SELECT MAX(id) FROM messages WHERE doctor_id = ? GROUP BY patient_id
+        )
+        ORDER BY datetime(m.created_at) DESC
+    ''', (doctor_id,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def mark_messages_read(patient_id: int, doctor_id: int, reader: str):
+    conn = get_db()
+    c = conn.cursor()
+    # If doctor reads, mark patient's messages as read. And vice versa.
+    sender_to_mark = 'patient' if reader == 'doctor' else 'doctor'
+    c.execute(
+        "UPDATE messages SET is_read = 1 WHERE patient_id = ? AND doctor_id = ? AND sender = ?",
+        (patient_id, doctor_id, sender_to_mark)
+    )
+    conn.commit()
+    conn.close()
 
 # --- Organizations ---
 def create_organization(name: str, type: str, code: str, address: Optional[str] = None) -> Dict:

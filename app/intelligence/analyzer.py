@@ -1,13 +1,16 @@
 import os
 import json
 import re
+from pathlib import Path
 from openai import AzureOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
+_BENCHMARKS_PATH = Path(__file__).parent / "benchmarks.json"
+
 def load_benchmarks():
-    with open("benchmarks.json", "r") as f:
+    with open(_BENCHMARKS_PATH, "r") as f:
         return json.load(f)
 
 def flag_values(extracted_text, benchmarks):
@@ -137,8 +140,3 @@ Instructions:
     )
 
     return response.choices[0].message.content
-
-if __name__ == "__main__":
-    # Test loading
-    benchmarks = load_benchmarks()
-    # print(json.dumps(benchmarks, indent=2))

@@ -1,4 +1,4 @@
-import mediconnect_db
+from app.mediconnect import database as mediconnect_db
 from datetime import datetime
 
 def seed_database():

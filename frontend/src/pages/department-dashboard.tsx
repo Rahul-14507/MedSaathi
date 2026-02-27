@@ -107,23 +107,38 @@ export default function DepartmentDashboard() {
     const completed = queue.filter(i => i.status === "completed");
 
     if (isLoading) {
-        return <div className="flex justify-center py-12"><Loader2 className="animate-spin w-6 h-6 text-muted-foreground" /></div>;
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center space-y-3">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
+                    <p className="text-muted-foreground text-sm font-medium">Loading queue…</p>
+                </div>
+            </div>
+        );
     }
 
     return (
         <div className="space-y-6 animate-slide-up">
             {/* Header */}
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-start flex-wrap gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                        <span className={theme.accent}>{theme.icon}</span> {theme.title}
+                    <p className="section-header mb-1">{(user as any)?.organization?.name || "Department"}</p>
+                    <h1 className="text-2xl font-bold text-foreground flex items-center gap-2 tracking-tight">
+                        <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${theme.bgAccent} ${theme.accent}`}>{theme.icon}</span>
+                        {theme.title}
                     </h1>
-                    <p className="text-muted-foreground text-sm mt-1">Process and fulfill clinical orders</p>
+                    <p className="text-muted-foreground text-sm mt-1">Process and fulfill clinical orders in real-time</p>
                 </div>
-                <div className="flex gap-2">
-                    <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 px-3 py-1">{pending.length} Pending</Badge>
-                    <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50 px-3 py-1">{inProgress.length} Active</Badge>
-                    <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50 px-3 py-1">{completed.length} Done</Badge>
+                <div className="flex gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                        <Clock className="w-3 h-3" /> {pending.length} Pending
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+                        <Activity className="w-3 h-3" /> {inProgress.length} Active
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3" /> {completed.length} Done
+                    </span>
                 </div>
             </div>
 
@@ -136,10 +151,10 @@ export default function DepartmentDashboard() {
 
                 <TabsContent value="queue" className="mt-6">
                     <Tabs defaultValue="pending" className="w-full">
-                        <TabsList className="grid w-full grid-cols-3 max-w-md">
-                            <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
-                            <TabsTrigger value="in_progress">Active ({inProgress.length})</TabsTrigger>
-                            <TabsTrigger value="completed">Done ({completed.length})</TabsTrigger>
+                        <TabsList className="grid w-full grid-cols-3 max-w-md rounded-xl">
+                            <TabsTrigger value="pending" className="text-xs font-semibold">Pending ({pending.length})</TabsTrigger>
+                            <TabsTrigger value="in_progress" className="text-xs font-semibold">Active ({inProgress.length})</TabsTrigger>
+                            <TabsTrigger value="completed" className="text-xs font-semibold">Done ({completed.length})</TabsTrigger>
                         </TabsList>
 
                         {["pending", "in_progress", "completed"].map((tab) => {

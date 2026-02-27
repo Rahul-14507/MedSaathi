@@ -1,7 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-import mediconnect_db
+from app.mediconnect import database as mediconnect_db
 from datetime import datetime
 import json
 import sqlite3
@@ -98,8 +98,12 @@ class TransferRequest(BaseModel):
     patientId: int
     targetOrgId: int
     fromOrgId: int
-    authorId: int
-    notes: Optional[str] = None
+
+class MessageRequest(BaseModel):
+    patientId: int
+    doctorId: Optional[int] = None
+    sender: str  # 'patient' or 'doctor'
+    content: str
 
 # --- Auth ---
 @router.post("/api/login")
@@ -488,3 +492,57 @@ async def create_transfer(req: TransferRequest):
 @router.get("/api/stats")
 async def get_stats():
     return mediconnect_db.get_stats()
+
+# --- Messages ---
+@router.get("/api/messages/{patient_id}")
+async def get_messages(patient_id: int):
+    messages = mediconnect_db.get_messages_by_patient(patient_id)
+    return messages
+
+@router.post("/api/messages")
+async def send_message(req: MessageRequest):
+    doctor_id = req.doctorId
+    # If doctor_id is not provided, infer from the patient's latest visit
+    if not doctor_id:
+        conn = mediconnect_db.get_db()
+        conn.row_factory = mediconnect_db.dict_factory
+        c = conn.cursor()
+        # Get the attending staff from the latest visit
+        c.execute(
+            "SELECT attended_by, organization_id FROM clinical_visits WHERE patient_id = ? ORDER BY id DESC LIMIT 1",
+            (req.patientId,)
+        )
+        row = c.fetchone()
+        if row and row.get("attended_by"):
+            # Check if the attended_by user is actually a doctor
+            c.execute("SELECT id, role, organization_id FROM users WHERE id = ?", (row["attended_by"],))
+            staff = c.fetchone()
+            if staff and staff["role"] == "doctor":
+                doctor_id = staff["id"]
+            else:
+                # Find a doctor in the same organization
+                org_id = row.get("organization_id") or (staff["organization_id"] if staff else None)
+                if org_id:
+                    c.execute("SELECT id FROM users WHERE role = 'doctor' AND organization_id = ? LIMIT 1", (org_id,))
+                    doc = c.fetchone()
+                    doctor_id = doc["id"] if doc else None
+        if not doctor_id:
+            # Ultimate fallback: first doctor in the system
+            c.execute("SELECT id FROM users WHERE role = 'doctor' LIMIT 1")
+            doc = c.fetchone()
+            doctor_id = doc["id"] if doc else 1
+        conn.close()
+
+    msg = mediconnect_db.create_message(req.patientId, doctor_id, req.sender, req.content)
+    await manager.broadcast({"type": "NEW_MESSAGE", "message": msg})
+    return msg
+
+@router.post("/api/messages/read")
+async def mark_read(patientId: int, doctorId: int, reader: str):
+    mediconnect_db.mark_messages_read(patientId, doctorId, reader)
+    return {"status": "ok"}
+
+@router.get("/api/doctor/messages")
+async def get_doctor_messages(doctorId: int):
+    messages = mediconnect_db.get_messages_for_doctor(doctorId)
+    return messages

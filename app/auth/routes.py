@@ -7,7 +7,7 @@ import bcrypt
 from jose import JWTError, jwt
 import uuid
 
-from db import get_db
+from app.auth.cosmos import get_db
 
 # Security config
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "generate_a_secure_random_key_here")
@@ -48,7 +48,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     
     if username.startswith("PAT-"):
-        import mediconnect_db
+        from app.mediconnect import database as mediconnect_db
         patients = mediconnect_db.search_patients(username)
         if not patients:
             raise credentials_exception
@@ -110,7 +110,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         if form_data.password != "password":
             raise HTTPException(status_code=401, detail="Incorrect username or password")
         
-        import mediconnect_db
+        from app.mediconnect import database as mediconnect_db
         patients = mediconnect_db.search_patients(form_data.username)
         if not patients:
             raise HTTPException(status_code=401, detail="Incorrect username or password")
@@ -120,7 +120,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         access_token = create_access_token(
             data={"sub": patient["unique_id"]}, expires_delta=access_token_expires
         )
-        return {"access_token": access_token, "token_type": "bearer", "user": {"username": patient["unique_id"]}}
+        return {"access_token": access_token, "token_type": "bearer", "user": {"username": patient["unique_id"], "id": patient["id"]}}
 
     db = get_db()
     users_container = db.get("users")
@@ -143,7 +143,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     access_token = create_access_token(
         data={"sub": user["username"]}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer", "user": {"username": user["username"]}}
+    return {"access_token": access_token, "token_type": "bearer", "user": {"username": user["username"], "id": user["id"]}}
 
 async def get_current_user_optional(token: str = Depends(OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False))):
     """Returns the user object if authenticated, else returns None (Guest mode)."""

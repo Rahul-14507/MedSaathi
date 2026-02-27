@@ -11,8 +11,10 @@ import { apiRequest } from "@/lib/utils";
 import { Link } from "wouter";
 import {
     Search, Loader2, User, Calendar, Droplets,
-    Phone, ArrowRight, Stethoscope, FileSearch
+    Phone, ArrowRight, Stethoscope, FileSearch, MessageSquare
 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type Patient = {
     id: number;
@@ -61,7 +63,15 @@ export default function DoctorDashboard() {
                 <p className="text-muted-foreground text-sm mt-1">Search patients, review history, and place clinical orders</p>
             </div>
 
-            <ActiveEmergencies />
+            <div className="grid lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                    <ActiveEmergencies />
+                    <PatientMessages />
+                </div>
+                <div className="space-y-6">
+                    {/* Placeholder for future right column widgets, e.g. schedule */}
+                </div>
+            </div>
 
             {/* Search Bar */}
             <Card className="border-primary/20">
@@ -221,6 +231,156 @@ function ActiveEmergencies() {
                     </Link>
                 ))}
             </div>
+        </div>
+    );
+}
+
+function PatientMessages() {
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [selectedPatient, setSelectedPatient] = useState<any>(null);
+    const [reply, setReply] = useState("");
+
+    const { data: messages = [], refetch } = useQuery<any[]>({
+        queryKey: ["/api/doctor/messages", user?.id],
+        queryFn: async () => {
+            if (!user?.id) return [];
+            const res = await apiRequest("GET", `/api/doctor/messages?doctorId=${user.id}`);
+            return res.json();
+        },
+        refetchInterval: 5000,
+        enabled: !!user?.id,
+    });
+
+    const { data: history = [] } = useQuery<any[]>({
+        queryKey: ["/api/messages", selectedPatient?.patient_id],
+        queryFn: async () => {
+            if (!selectedPatient?.patient_id) return [];
+            const res = await apiRequest("GET", `/api/messages/${selectedPatient.patient_id}`);
+            return res.json();
+        },
+        enabled: !!selectedPatient,
+        refetchInterval: 3000,
+    });
+
+    const markReadMutation = useMutation({
+        mutationFn: async (patientId: number) => {
+            await apiRequest("POST", `/api/messages/read?patientId=${patientId}&doctorId=${user?.id}&reader=doctor`);
+        },
+        onSuccess: () => refetch()
+    });
+
+    const sendReplyMutation = useMutation({
+        mutationFn: async () => {
+            const res = await apiRequest("POST", "/api/messages", {
+                patientId: selectedPatient.patient_id,
+                doctorId: user?.id,
+                sender: "doctor",
+                content: reply
+            });
+            return res.json();
+        },
+        onSuccess: () => {
+            setReply("");
+            toast({ title: "Reply Sent" });
+        }
+    });
+
+    const handleOpenThread = (msg: any) => {
+        setSelectedPatient(msg);
+        if (msg.sender === 'patient' && !msg.is_read) {
+            markReadMutation.mutate(msg.patient_id);
+        }
+    };
+
+    const unreadCount = messages.filter((m: any) => m.sender === 'patient' && !m.is_read).length;
+
+    return (
+        <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" /> Patient Messages
+                {unreadCount > 0 && <span className="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full">{unreadCount} New</span>}
+            </h2>
+            {(!messages || messages.length === 0) && (
+                <Card>
+                    <CardContent className="p-6 text-center text-muted-foreground">
+                        <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                        <p className="text-sm">No patient messages yet</p>
+                        <p className="text-xs mt-1">Messages from patients will appear here</p>
+                    </CardContent>
+                </Card>
+            )}
+            <div className="grid gap-3">
+                {messages.map((msg) => (
+                    <Card key={msg.id} className={`cursor-pointer transition-all hover:border-primary/30 ${msg.sender === 'patient' && !msg.is_read ? 'bg-primary/5' : ''}`} onClick={() => handleOpenThread(msg)}>
+                        <CardContent className="p-4 flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-white font-bold shadow-md shrink-0">
+                                {msg.patient_name.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-baseline mb-1">
+                                    <h3 className="font-semibold text-sm truncate pr-2">
+                                        {msg.patient_name} <span className="text-xs text-muted-foreground ml-1 font-mono">{msg.patient_unique_id}</span>
+                                    </h3>
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                        {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                                    </span>
+                                </div>
+                                <p className={`text-sm truncate ${msg.sender === 'patient' && !msg.is_read ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                                    {msg.sender === 'doctor' ? 'You: ' : ''}{msg.content}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+
+            <Dialog open={!!selectedPatient} onOpenChange={(open) => !open && setSelectedPatient(null)}>
+                <DialogContent className="sm:max-w-[500px] h-[600px] flex flex-col p-0 gap-0 overflow-hidden">
+                    <DialogHeader className="p-4 border-b bg-muted/20">
+                        <DialogTitle className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white font-bold text-xs">
+                                {selectedPatient?.patient_name?.charAt(0)}
+                            </div>
+                            <div>
+                                <div className="text-base">{selectedPatient?.patient_name}</div>
+                                <div className="text-xs text-muted-foreground font-mono">{selectedPatient?.patient_unique_id}</div>
+                            </div>
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                        {history.map((h: any) => {
+                            const isDoc = h.sender === 'doctor';
+                            return (
+                                <div key={h.id} className={`flex ${isDoc ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${isDoc ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-white border text-foreground rounded-tl-sm shadow-sm'}`}>
+                                        <p>{h.content}</p>
+                                        <span className={`text-[10px] block mt-1 ${isDoc ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                            {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="p-4 border-t bg-white">
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="Type a reply..."
+                                value={reply}
+                                onChange={(e) => setReply(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && reply.trim() && sendReplyMutation.mutate()}
+                                className="flex-1"
+                            />
+                            <Button onClick={() => sendReplyMutation.mutate()} disabled={!reply.trim() || sendReplyMutation.isPending}>
+                                Send
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

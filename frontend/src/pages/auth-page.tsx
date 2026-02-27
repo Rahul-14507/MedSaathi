@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Heart, Shield, FileText, Activity, ArrowRight, Loader2 } from "lucide-react";
+import { Heart, Shield, FileText, Activity, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 
 const loginSchema = z.object({
     orgCode: z.string().min(1, "Organization Code is required"),
@@ -37,14 +37,19 @@ export default function AuthPage() {
             {/* Left Panel — Hero */}
             <div className="hidden lg:flex lg:w-1/2 gradient-hero relative overflow-hidden">
                 <div className="relative z-10 flex flex-col justify-center px-16 text-white">
-                    <div className="flex items-center gap-3 mb-8">
-                        <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
-                            <Heart className="w-8 h-8 text-white" />
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-3">
+                            <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+                                <Heart className="w-8 h-8 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold tracking-tight">MediConnect</h1>
+                                <p className="text-white/70 text-sm">Clinical Workflow Platform</p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight">MediConnect</h1>
-                            <p className="text-white/70 text-sm">Clinical Workflow Platform</p>
-                        </div>
+                        <a href="/" className="flex items-center gap-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition-all text-sm font-medium backdrop-blur-md">
+                            <ArrowLeft className="w-4 h-4" /> Back to MedSaathi
+                        </a>
                     </div>
 
                     <h2 className="text-4xl font-bold leading-tight mb-4">
@@ -78,7 +83,12 @@ export default function AuthPage() {
             </div>
 
             {/* Right Panel — Login */}
-            <div className="flex-1 flex items-center justify-center p-6 bg-background">
+            <div className="flex-1 flex flex-col items-center justify-center p-6 bg-background relative">
+                <div className="lg:hidden absolute top-6 left-6">
+                    <a href="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors">
+                        <ArrowLeft className="w-4 h-4" /> Back to MedSaathi
+                    </a>
+                </div>
                 <div className="w-full max-w-md">
                     {/* Mobile logo */}
                     <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">

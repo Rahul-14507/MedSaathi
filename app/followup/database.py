@@ -1,8 +1,9 @@
 import sqlite3
 import os
+from pathlib import Path
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "followup.db")
+DB_PATH = str(Path(__file__).parent.parent.parent / "data" / "followup.db")
 
 def init_db():
     """Initializes the SQLite database with required tables."""
